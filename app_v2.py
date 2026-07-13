@@ -121,6 +121,13 @@ st.markdown(f"""
         font-family: {FONT_FAMILY};
         direction: rtl;
     }}
+    /* عناصر الإدخال (زر/حقل/قائمة) لا ترث الخط من body افتراضياً في المتصفح،
+       لذا نفرض الخط صراحةً عليها وعلى كل عناصر ستريملت مع !important حتى
+       لا تُغلَب بخط ستريملت الافتراضي المحمَّل لاحقاً في الصفحة. */
+    [data-testid], [data-testid] *,
+    button, input, select, textarea, option, label {{
+        font-family: {FONT_FAMILY} !important;
+    }}
     .stApp {{ background: linear-gradient(160deg,#f6faf7 0%,#eef5f0 100%); }}
 
     .hero {{
@@ -161,8 +168,21 @@ st.markdown(f"""
     }}
     section[data-testid="stSidebar"] {{ background:{DARK}; }}
     section[data-testid="stSidebar"] * {{ color:#eafff2 !important; }}
-    section[data-testid="stSidebar"] div[data-baseweb="select"] * {{ color:#0E2A1F !important; }}
-    section[data-testid="stSidebar"] div[data-baseweb="select"] > div {{ background:#ffffff !important; }}
+    /* صندوق «اختر الحساب» نفسه: خلفية بيضاء ونص داكن واضح، بأكثر من محدّد
+       احتياطاً لاختلاف بنية BaseWeb الداخلية بين إصدارات ستريملت. */
+    section[data-testid="stSidebar"] [data-baseweb="select"],
+    section[data-testid="stSidebar"] [data-baseweb="select"] > div {{
+        background:#ffffff !important;
+    }}
+    section[data-testid="stSidebar"] [data-baseweb="select"] *,
+    section[data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"] * {{
+        color:#0E2A1F !important;
+    }}
+    section[data-testid="stSidebar"] [data-baseweb="select"] svg {{
+        fill:#0E2A1F !important;
+    }}
+    /* قائمة الخيارات المنسدلة تُعرض خارج الشريط الجانبي (portal)، فتُنسَّق منفصلة */
+    div[data-baseweb="popover"] {{ background:#ffffff !important; }}
     div[data-baseweb="popover"] li {{ color:#0E2A1F !important; }}
     div[data-baseweb="popover"] * {{ color:#0E2A1F !important; }}
     .stButton>button {{
