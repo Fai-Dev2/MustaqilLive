@@ -1,14 +1,3 @@
----
-title: Mustaqil
-emoji: 💰
-colorFrom: green
-colorTo: yellow
-sdk: streamlit
-sdk_version: "1.39.0"
-app_file: app_v2.py
-pinned: false
----
-
 # مستقل | Mustaqil
 
 الرفيق المالي الذكي للفريلانسر السعودي، هاكاثون أمد، مصرف الإنماء × أكاديمية طويق.
