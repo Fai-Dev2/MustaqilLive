@@ -168,17 +168,16 @@ st.markdown(f"""
     }}
     section[data-testid="stSidebar"] {{ background:{DARK}; }}
     section[data-testid="stSidebar"] * {{ color:#eafff2 !important; }}
-    /* صندوق «اختر الحساب» نفسه: خلفية بيضاء ونص داكن واضح، بأكثر من محدّد
-       احتياطاً لاختلاف بنية BaseWeb الداخلية بين إصدارات ستريملت. */
-    section[data-testid="stSidebar"] [data-baseweb="select"],
-    section[data-testid="stSidebar"] [data-baseweb="select"] > div {{
+    /* بطاقة «اختر الحساب»: خلفية بيضاء ونص داكن مضمون. نستهدف غلاف ستريملت
+       الثابت stSelectbox بدل تفاصيل BaseWeb الداخلية التي تتغيّر بين الإصدارات. */
+    section[data-testid="stSidebar"] [data-testid="stSelectbox"] {{
         background:#ffffff !important;
+        border-radius:10px; padding:6px 10px; margin-bottom:6px;
     }}
-    section[data-testid="stSidebar"] [data-baseweb="select"] *,
-    section[data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"] * {{
+    section[data-testid="stSidebar"] [data-testid="stSelectbox"] * {{
         color:#0E2A1F !important;
     }}
-    section[data-testid="stSidebar"] [data-baseweb="select"] svg {{
+    section[data-testid="stSidebar"] [data-testid="stSelectbox"] svg {{
         fill:#0E2A1F !important;
     }}
     /* قائمة الخيارات المنسدلة تُعرض خارج الشريط الجانبي (portal)، فتُنسَّق منفصلة */
@@ -616,15 +615,19 @@ def _tlv(tag, value):
     vb = str(value).encode("utf-8")
     return bytes([tag, len(vb)]) + vb
 
-def zatca_qr(seller_name, vat_number, timestamp_iso, total_incl_vat, vat_amount):
-    """يرجّع (Base64 لحمولة TLV القياسية، Base64 لصورة QR بصيغة PNG)."""
+def zatca_tlv_payload(seller_name, vat_number, timestamp_iso, total_incl_vat, vat_amount):
+    """يبني الحمولة القياسية (TLV) المعتمدة في فوترة (ZATCA) المرحلة الأولى، Base64.
+    هذه هي الصيغة التي يحملها رمز QR فعلياً في نظام فوترة معتمد: بيانات مرمَّزة
+    تُقرأ آلياً بواسطة أنظمة الجهة الضريبية، وليست نصاً يظهر عند المسح."""
     payload = (_tlv(1, seller_name) + _tlv(2, vat_number) + _tlv(3, timestamp_iso) +
                _tlv(4, f"{total_incl_vat:.2f}") + _tlv(5, f"{vat_amount:.2f}"))
-    payload_b64 = base64.b64encode(payload).decode()
-    img = qrcode.make(payload_b64)
+    return base64.b64encode(payload).decode()
+
+def make_qr_png_b64(content):
+    """يحوّل أي نص إلى صورة QR بصيغة PNG مُرمَّزة Base64."""
+    img = qrcode.make(content)
     buf = io.BytesIO(); img.save(buf, format="PNG")
-    img_b64 = base64.b64encode(buf.getvalue()).decode()
-    return payload_b64, img_b64
+    return base64.b64encode(buf.getvalue()).decode()
 
 # ═══════════════════════════════════════════════════════════════
 #  التبويبات
@@ -700,7 +703,7 @@ with tab1:
                 f'<div class="metric-val">{avg_12:,.0f} {RIYAL}</div></div>', unsafe_allow_html=True)
     d2.markdown(f'<div class="metric-card"><div class="metric-label">إجمالي دخل السنة</div>'
                 f'<div class="metric-val">{total_income_12:,.0f} {RIYAL}</div></div>', unsafe_allow_html=True)
-    d3.markdown(f'<div class="metric-card"><div class="metric-label">استقرار التدفق</div>'
+    d3.markdown(f'<div class="metric-card"><div class="metric-label">استقرار الدخل</div>'
                 f'<div class="metric-val">{stability:.0f}%</div></div>', unsafe_allow_html=True)
     st.caption("الوثيقة الرسمية الكاملة القابلة للتحميل متوفّرة في تبويب «مؤشر الجدارة».")
 
@@ -1318,18 +1321,27 @@ with tab7:
                 cats = ["الدخل السنوي","ساعات العمل","ربح الساعة","عدد المشاريع"]
                 changes = [d_inc, d_hrs, d_rate, delta(n["projects"],b["projects"])]
                 bar_colors = [PRIMARY if v>=0 else DRY_RED for v in changes]
+                # حشوة سخية حول أعلى قيمة مطلقة حتى لا تُقصّ أرقام النِّسب عند حافة
+                # الرسم، مع cliponaxis=False كضمان إضافي لعدم اقتصاصها.
+                max_abs = max(5.0, max(abs(v) for v in changes))
+                pad = max_abs * 0.45 + 8
                 figs = go.Figure(go.Bar(
                     x=changes, y=cats, orientation="h",
-                    marker_color=bar_colors,
+                    marker_color=bar_colors, marker_line_width=0,
                     text=[f"{'+' if v>=0 else ''}{v:.0f}%" for v in changes],
-                    textposition="outside"))
-                figs.update_layout(height=360, margin=dict(t=40,b=40,l=10,r=40),
-                                   plot_bgcolor="white", font=dict(family=FONT_FAMILY_PLOTLY),
-                                   title="كم يتغيّر كل شيء مقارنةً بوضعك الحالي؟",
-                                   xaxis=dict(title="% التغيّر", zeroline=True,
-                                              zerolinecolor="#0E2A1F", zerolinewidth=2,
-                                              automargin=True),
-                                   yaxis=dict(automargin=True))
+                    textposition="outside", cliponaxis=False,
+                    textfont=dict(size=16, family=FONT_FAMILY_PLOTLY, color=DARK),
+                    width=0.55))
+                figs.update_layout(height=380, margin=dict(t=70,b=50,l=20,r=20),
+                                   plot_bgcolor="white", paper_bgcolor="white",
+                                   font=dict(family=FONT_FAMILY_PLOTLY, size=14),
+                                   bargap=0.35, showlegend=False,
+                                   title=dict(text="كم يتغيّر كل شيء مقارنةً بوضعك الحالي؟",
+                                              x=0.5, xanchor="center", font=dict(size=16)),
+                                   xaxis=dict(title="% التغيّر", range=[-max_abs-pad, max_abs+pad],
+                                              zeroline=True, zerolinecolor=DARK, zerolinewidth=2,
+                                              showgrid=True, gridcolor="#eef2f0", automargin=True),
+                                   yaxis=dict(automargin=True, autorange="reversed"))
                 st.plotly_chart(figs, use_container_width=True)
 
             with cc2:
@@ -1662,8 +1674,24 @@ with tab_invoice:
                 f'<div class="metric-val">{total_incl_vat:,.2f} {RIYAL}</div></div>', unsafe_allow_html=True)
 
     if st.button("إصدار الفاتورة وتوليد رمز QR"):
-        payload_b64, qr_png_b64 = zatca_qr(uname, inv_vat_number, issued_at,
-                                           total_incl_vat, vat_amount)
+        payload_b64 = zatca_tlv_payload(uname, inv_vat_number, issued_at,
+                                        total_incl_vat, vat_amount)
+        # رمز QR الظاهر للمستخدم يحمل ملخّصاً مقروءاً للفاتورة كي يعرضه أي جوال
+        # عند المسح مباشرةً، بدل حمولة TLV الثنائية التي لا تُقرأ إلا آلياً
+        # (هي محفوظة أدناه وفي قاعدة البيانات لأغراض التوثيق التقني).
+        readable_summary = (
+            f"فاتورة مستقل | Mustaqil\n"
+            f"رقم الفاتورة: {inv_number}\n"
+            f"البائع: {uname} ({specialty})\n"
+            f"الرقم الضريبي للبائع: {inv_vat_number}\n"
+            f"العميل: {inv_client}\n"
+            f"الوصف: {inv_desc}\n"
+            f"التاريخ: {issued_at}\n"
+            f"المبلغ قبل الضريبة: {inv_amount:,.2f} ريال\n"
+            f"ضريبة القيمة المضافة (15%): {vat_amount:,.2f} ريال\n"
+            f"الإجمالي شامل الضريبة: {total_incl_vat:,.2f} ريال"
+        )
+        qr_png_b64 = make_qr_png_b64(readable_summary)
         db.save_invoice(fid, inv_number, inv_client, inv_desc, inv_amount,
                         vat_amount, total_incl_vat, inv_vat_number, issued_at, payload_b64)
         st.session_state["_last_invoice"] = {
@@ -1677,10 +1705,14 @@ with tab_invoice:
         li = st.session_state["_last_invoice"]
         qc1, qc2 = st.columns([1, 2])
         with qc1:
-            st.image(base64.b64decode(li["qr"]), caption="رمز QR للفاتورة", width=200)
+            st.image(base64.b64decode(li["qr"]), caption="امسح الرمز لعرض تفاصيل الفاتورة", width=200)
         with qc2:
-            st.caption("حمولة TLV السداسية-الستّينية (Base64)، هي محتوى رمز QR نفسه:")
-            st.code(li["payload"], language=None)
+            st.caption("رمز QR أعلاه يعرض تفاصيل الفاتورة مباشرةً عند مسحه بكاميرا أي جوال.")
+            with st.expander("الحمولة القياسية المعتمدة في فوترة (ZATCA) — TLV Base64"):
+                st.caption("في نظام فوترة معتمد فعلياً يحمل رمز QR هذه البيانات المرمَّزة بدل "
+                           "النص المقروء، لتُقرأ آلياً من أنظمة الجهة الضريبية. نعرضها هنا "
+                           "للتوثيق التقني، وهي المحفوظة في قاعدة البيانات مع الفاتورة.")
+                st.code(li["payload"], language=None)
 
         inv_doc_inner = f"""<div class="head">
   <img src="data:image/jpeg;base64,{LOGO_B64}" style="height:60px;margin-bottom:8px">
